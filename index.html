@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · Skills & MCP 全景仪表盘</title>
+<style>
+  /* ══════════════════════════════════════════════════
+     CSS 变量与重置
+     ══════════════════════════════════════════════════ */
+  :root {
+    --bg-base: #0b0d12;
+    --bg-surface: #11141c;
+    --bg-card: #171b26;
+    --bg-card-hover: #1d2232;
+    --border-subtle: #1e2538;
+    --border-accent: #2a3555;
+    --text-primary: #e8edf5;
+    --text-secondary: #8892a8;
+    --text-tertiary: #5a6480;
+    --cyan: #5dd8f9;
+    --cyan-dim: rgba(93, 216, 249, 0.08);
+    --cyan-glow: rgba(93, 216, 249, 0.25);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167, 139, 250, 0.08);
+    --purple-glow: rgba(167, 139, 250, 0.20);
+    --emerald: #4ade80;
+    --emerald-dim: rgba(74, 222, 128, 0.08);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251, 191, 36, 0.08);
+    --rose: #fb7185;
+    --rose-dim: rgba(251, 113, 133, 0.08);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --shadow-card: 0 2px 24px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ══════════════════════════════════════════════════
+     背景网格 + 光晕
+     ══════════════════════════════════════════════════ */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border-subtle) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0, black 30%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0, black 30%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: -40vh; left: 50%;
+    width: 80vmax; height: 80vmax;
+    background: radial-gradient(circle, var(--cyan-glow) 0%, transparent 65%);
+    transform: translate(-50%, 0);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.35;
+  }
+
+  /* ══════════════════════════════════════════════════
+     滚动条
+     ══════════════════════════════════════════════════ */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+  /* ══════════════════════════════════════════════════
+     布局
+     ══════════════════════════════════════════════════ */
+  .app { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 0 40px 80px; }
+
+  /* ══════════════════════════════════════════════════
+     Header
+     ══════════════════════════════════════════════════ */
+  header {
+    padding: 64px 0 48px;
+    text-align: center;
+    position: relative;
+  }
+  header .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--border-accent);
+    background: rgba(42, 53, 85, 0.3);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    backdrop-filter: blur(4px);
+  }
+  header .badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--emerald);
+    box-shadow: 0 0 8px var(--emerald);
+  }
+  header h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #f0f4ff 0%, var(--cyan) 50%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header p {
+    margin-top: 14px;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin-inline: auto;
+  }
+
+  /* ══════════════════════════════════════════════════
+     摘要统计条
+     ══════════════════════════════════════════════════ */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px 24px;
+    text-align: center;
+    transition: border-color .2s;
+  }
+  .stat-card:hover { border-color: var(--border-accent); }
+  .stat-card .num {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--cyan);
+  }
+  .stat-card .label {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* ══════════════════════════════════════════════════
+     MCP 服务横幅
+     ══════════════════════════════════════════════════ */
+  .mcp-section {
+    margin-bottom: 56px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-header .icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .section-header .icon.cyan  { background: var(--cyan-dim);  color: var(--cyan); }
+  .section-header .icon.purple{ background: var(--purple-dim); color: var(--purple); }
+  .section-header .icon.emerald{background:var(--emerald-dim);color:var(--emerald);}
+  .section-header .icon.amber { background: var(--amber-dim);  color: var(--amber); }
+  .section-header .icon.rose  { background: var(--rose-dim);  color: var(--rose); }
+  .section-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .section-header .count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    background: var(--bg-card);
+    padding: 2px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .mcp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+  }
+  .mcp-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .mcp-card:hover {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 20px rgba(93,216,249,0.06);
+  }
+  .mcp-card .mcp-icon {
+    width: 42px; height: 42px; min-width: 42px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+  }
+  .mcp-card .mcp-body { flex: 1; min-width: 0; }
+  .mcp-card .mcp-body h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .mcp-card .mcp-body .cmd {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    background: var(--bg-base);
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 6px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid var(--border-subtle);
+  }
+  .mcp-card .mcp-body .desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* ══════════════════════════════════════════════════
+     Skills 分类
+     ══════════════════════════════════════════════════ */
+  .skills-section { margin-bottom: 48px; }
+
+  .skill-category {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 20px;
+    transition: border-color .2s;
+  }
+  .skill-category:hover { border-color: var(--border-accent); }
+
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+  }
+  .cat-header:hover { background: rgba(255,255,255,0.015); }
+  .cat-header .chevron {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+  }
+  .cat-header .chevron.open { transform: rotate(90deg); }
+  .cat-header h3 { font-size: 0.95rem; font-weight: 600; }
+  .cat-header .cat-count {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    background: var(--bg-card);
+    padding: 1px 10px;
+    border-radius: 100px;
+  }
+
+  .cat-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .45s cubic-bezier(.4,0,.2,1);
+  }
+  .cat-body.open { max-height: 20000px; }
+
+  .skill-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    padding: 0 24px 20px;
+  }
+
+  .skill-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    transition: border-color .2s, background .2s, transform .15s;
+    cursor: default;
+  }
+  .skill-item:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-card-hover);
+    transform: translateY(-1px);
+  }
+  .skill-item .sk-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+  }
+  .skill-item .sk-desc {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.45;
+  }
+
+  /* ══════════════════════════════════════════════════
+     搜索
+     ══════════════════════════════════════════════════ */
+  .search-bar {
+    position: relative;
+    max-width: 420px;
+    margin: 0 auto 40px;
+  }
+  .search-bar input {
+    width: 100%;
+    padding: 12px 18px 12px 44px;
+    border-radius: 100px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    outline: none;
+    transition: border-color .25s, box-shadow .25s;
+  }
+  .search-bar input:focus {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 3px rgba(93,216,249,0.08);
+  }
+  .search-bar input::placeholder { color: var(--text-tertiary); }
+  .search-bar .search-icon {
+    position: absolute;
+    left: 16px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+
+  /* ══════════════════════════════════════════════════
+     空状态
+     ══════════════════════════════════════════════════ */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-tertiary);
+    display: none;
+  }
+  .empty-state.show { display: block; }
+  .empty-state .empty-icon { font-size: 2.4rem; margin-bottom: 12px; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* ══════════════════════════════════════════════════
+     Footer
+     ══════════════════════════════════════════════════ */
+  footer {
+    text-align: center;
+    padding: 40px 0 20px;
+    border-top: 1px solid var(--border-subtle);
+    color: var(--text-tertiary);
+    font-size: 0.78rem;
+  }
+  footer .time { color: var(--text-secondary); }
+
+  /* ══════════════════════════════════════════════════
+     响应式
+     ══════════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .app { padding: 0 16px 60px; }
+    header { padding: 40px 0 32px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .skill-list { grid-template-columns: 1fr; padding: 0 16px 16px; }
+    .cat-header { padding: 14px 16px; }
+    .mcp-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ══════════════════════════════════════════════════
+     动画 — 入场
+     ══════════════════════════════════════════════════ */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: fadeUp .5s cubic-bezier(.22,1,.36,1) forwards;
+  }
+  @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+  .fade-in:nth-child(1) { animation-delay: 0.02s; }
+  .fade-in:nth-child(2) { animation-delay: 0.06s; }
+  .fade-in:nth-child(3) { animation-delay: 0.10s; }
+  .fade-in:nth-child(4) { animation-delay: 0.14s; }
+  .fade-in:nth-child(5) { animation-delay: 0.18s; }
+
+  /* ══════════════════════════════════════════════════
+     标签颜色
+     ══════════════════════════════════════════════════ */
+  .tag {
+    display: inline-block;
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 1px 8px;
+    border-radius: 100px;
+    text-transform: uppercase;
+  }
+  .tag-cyan    { background: var(--cyan-dim);    color: var(--cyan); }
+  .tag-purple  { background: var(--purple-dim);  color: var(--purple); }
+  .tag-emerald { background: var(--emerald-dim); color: var(--emerald); }
+  .tag-amber   { background: var(--amber-dim);   color: var(--amber); }
+  .tag-rose    { background: var(--rose-dim);    color: var(--rose); }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ════ HEADER ════ -->
+  <header class="fade-in">
+    <div class="badge">
+      <span class="dot"></span>
+      Claude Code 环境
+    </div>
+    <h1>Skills &amp; MCP 全景仪表盘</h1>
+    <p>本地已安装的全部 66 个 Skill 与 3 个 MCP 服务，按领域分类展示</p>
+  </header>
+
+  <!-- ════ STATS ════ -->
+  <div class="stats fade-in" id="stats"></div>
+
+  <!-- ════ SEARCH ════ -->
+  <div class="search-bar fade-in">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" id="searchInput" placeholder="搜索 skill 名称或描述…" oninput="filterSkills()">
+  </div>
+
+  <!-- ════ MCP ════ -->
+  <section class="mcp-section fade-in" id="mcpSection">
+    <div class="section-header">
+      <span class="icon cyan">&#9881;</span>
+      <h2>MCP 服务</h2>
+      <span class="count">3 个</span>
+    </div>
+    <div class="mcp-grid" id="mcpGrid"></div>
+  </section>
+
+  <!-- ════ SKILLS ════ -->
+  <section class="skills-section fade-in" id="skillsSection">
+    <div class="section-header">
+      <span class="icon purple">&#9889;</span>
+      <h2>已安装 Skills</h2>
+      <span class="count">66 个</span>
+    </div>
+    <div id="skillsContainer"></div>
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">&#128270;</div>
+      <p>没有匹配的 skill</p>
+    </div>
+  </section>
+
+  <!-- ════ FOOTER ════ -->
+  <footer class="fade-in">
+    <span class="time" id="footerTime"></span> &middot;
+    Claude Code 环境全景 &middot; 自动生成
+  </footer>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// 数据
+// ══════════════════════════════════════════════════════
+
+const STATS = [
+  { label: 'Skills', num: 66,      color: 'var(--cyan)' },
+  { label: 'MCP 服务',  num: 3,    color: 'var(--purple)' },
+  { label: '分类数',   num: 5,     color: 'var(--emerald)' },
+  { label: '最后更新', num: '今日', color: 'var(--amber)', small: true },
+];
+
+const MCPS = [
+  {
+    name: 'filesystem',
+    icon: '&#128193;',
+    cmd:  '@modelcontextprotocol/server-filesystem',
+    desc: '文件系统访问 — 读写桌面与文档目录',
+  },
+  {
+    name: 'github',
+    icon: '&#128187;',
+    cmd:  '@modelcontextprotocol/server-github',
+    desc: 'GitHub API 集成 — 仓库、Issue、PR 管理',
+  },
+  {
+    name: 'drawio',
+    icon: '&#127912;',
+    cmd:  '@drawio/mcp',
+    desc: 'Draw.io 图表绘制 — 架构图、流程图',
+  },
+];
+
+const CATEGORIES = [
+  {
+    name: '学术科研',
+    emoji: '&#127891;',
+    color: 'cyan',
+    items: [
+      { name: 'systematic-literature-review',   desc: '相关性评分驱动的系统综述流水线，支持多语言 PDF/Word 导出' },
+      { name: 'academic-writing-polisher',       desc: 'Nature 级学术写作润色，保持作者意图的同时提升清晰度与期刊风格' },
+      { name: 'academic-paper-tracker',          desc: '论文进度追踪与状态管理' },
+      { name: 'paper-write-sci',                 desc: 'SCI 论文写作与修订，支持风格化写作、数字核验与逻辑审查' },
+      { name: 'paper-select-journal',            desc: '基于手稿 + IF 数据库 + 联网核验的 SCI 选刊推荐' },
+      { name: 'paper-explain-figures',           desc: '论文图表解读，高可读性 Markdown 报告' },
+      { name: 'review-papers',                   desc: '学术论文自动审稿，结构化双语评审意见' },
+      { name: 'revision',                        desc: '论文自动审稿系统，结构化评审与存档' },
+      { name: 'thesis-review',                   desc: '本科毕业论文审阅，多视角评阅' },
+      { name: 'check-review-alignment',          desc: '综述引用语义核查，仅对致命错误做最小改写' },
+      { name: 'get-review-theme',                desc: '多源输入的结构化综述主题提取' },
+      { name: 'transfer-old-latex-to-new',       desc: 'LaTeX 模板迁移 — 旧项目套用新模板' },
+      { name: 'make-latex-model',                desc: 'LaTeX 模板优化与样式参数对齐' },
+    ],
+  },
+  {
+    name: '内容创作',
+    emoji: '&#127912;',
+    color: 'emerald',
+    items: [
+      { name: 'baoyu-cover-image',     desc: '5 维参数文章封面图生成（11 色板 × 7 渲染风格）' },
+      { name: 'baoyu-image-cards',     desc: '小红书/微信图文卡片系列，12 视觉风格 × 8 布局' },
+      { name: 'baoyu-image-gen',       desc: '多 API 文生图（OpenAI / Google / 国产大模型等）' },
+      { name: 'baoyu-infographic',     desc: '21 种布局 × 22 视觉风格的专业信息图生成' },
+      { name: 'baoyu-format-markdown', 'desc': 'Markdown 格式美化 — 标题、摘要、列表、代码块' },
+      { name: 'baoyu-markdown-to-html',desc: 'Markdown → 微信兼容 HTML，支持代码/数学/图表' },
+      { name: 'baoyu-wechat-summary',  desc: '微信群聊精华摘要，支持常规版与毒舌版' },
+    ],
+  },
+  {
+    name: 'Web 开发与设计',
+    emoji: '&#127760;',
+    color: 'purple',
+    items: [
+      { name: 'frontend-design',          desc: '高端前端界面设计，避免 AI 泛化风格' },
+      { name: 'taste-skill',              desc: 'Anti-slop 前端技能 — 真正的设计系统，非模板化 UI' },
+      { name: 'taste-skill-v1',           desc: '原版 taste-skill，向后兼容保留' },
+      { name: 'gpt-tasteskill',           desc: 'Awwwards 级 UI/UX — GSAP 动效、严格 AIDA 结构' },
+      { name: 'minimalist-skill',         desc: '编辑风极简界面 — 暖色单色、排版对比、扁平网格' },
+      { name: 'brutalist-skill',          desc: '工业粗野主义 UI — 瑞士印刷 × 军事终端美学' },
+      { name: 'soft-skill',               desc: '高端代理设计品味 — 昂贵质感、防 AI 泛化' },
+      { name: 'stitch-skill',             desc: 'Google Stitch 语义设计系统 — 反泛化高标准 UI' },
+      { name: 'redesign-skill',           desc: '现有网站/应用升级 — 审计 → 高端改造' },
+      { name: 'tailwind',                 desc: 'Tailwind CSS for HyperFrames' },
+      { name: 'theme-factory',            desc: '10 套预设主题 + 动态生成，应用于任何制品' },
+      { name: 'brand-guidelines',         desc: 'Anthropic 官方品牌色板与字体应用' },
+      { name: 'brandkit',                 desc: '高端品牌套件图像生成 — 标识系统与视觉世界' },
+      { name: 'huashu-design',            desc: '花叔 Design — 设计系统与组件' },
+      { name: 'huashu-md-html',           desc: '花叔 Markdown → HTML 转换' },
+      { name: 'imagegen-frontend-web',    desc: '高端前端图像方向 — 逐节独立生成' },
+      { name: 'imagegen-frontend-mobile', desc: '高端移动端 App 屏幕概念设计' },
+      { name: 'image-to-code-skill',      desc: '设计图 → 代码 — 先生成图像再实现' },
+      { name: 'web-artifacts-builder',    desc: '复杂 HTML 制品构建（React / shadcn/ui）' },
+      { name: 'clone-website',            desc: '网站克隆工具' },
+      { name: 'website-to-hyperframes',   desc: '网站 → HyperFrames 转换' },
+      { name: 'gsap',                     desc: 'GSAP 动画适配 HyperFrames' },
+      { name: 'animejs',                  desc: 'Anime.js 动画适配 HyperFrames' },
+      { name: 'three',                    desc: 'Three.js / WebGL 适配 HyperFrames' },
+      { name: 'css-animations',           desc: 'CSS 关键帧动画适配 HyperFrames' },
+      { name: 'lottie',                   desc: 'Lottie / dotLottie 动画适配 HyperFrames' },
+    ],
+  },
+  {
+    name: '工具与实用',
+    emoji: '&#128295;',
+    color: 'amber',
+    items: [
+      { name: 'pdf',                desc: 'PDF 全流程处理 — 提取、合并、拆分、水印、OCR' },
+      { name: 'docx',               desc: 'Word 文档创建、编辑、分析与格式转换' },
+      { name: 'pptx',               desc: 'PPT 幻灯片创建、编辑、提取与分析' },
+      { name: 'xlsx',               desc: 'Excel 电子表格创建、编辑、公式与图表' },
+      { name: 'chem-vis',           desc: '化学结构可视化 — 2D PNG/SVG + 3D 交互视图' },
+      { name: 'claude-api',         desc: 'Claude API / Anthropic SDK 构建与优化' },
+      { name: 'mcp-builder',        desc: 'MCP 服务端开发指南（Python / TypeScript）' },
+      { name: 'skill-creator',      desc: '创建、修改、评测自定义 Skill' },
+      { name: 'json-canvas',        desc: 'JSON Canvas (.canvas) 文件创建与编辑' },
+      { name: 'fireworks-tech-graph',desc: '技术图表生成 — 架构图、流程图等' },
+      { name: 'canvas-design',      desc: '精美视觉艺术 PNG / PDF 文档设计' },
+      { name: 'output-skill',       desc: '完整代码输出强制 — 防截断、防占位符' },
+      { name: 'webapp-testing',     desc: '本地 Web 应用 Playwright 测试' },
+      { name: 'doc-coauthoring',    desc: '结构化文档协作写作工作流' },
+      { name: 'internal-comms',     desc: '企业内部沟通文档模板与格式' },
+      { name: 'slack-gif-creator',  desc: 'Slack 优化 GIF 动画创建工具' },
+      { name: 'template',           desc: '通用 Skill 模板（待配置）' },
+      { name: 'defuddle',           desc: '网页 → 纯净 Markdown 提取' },
+      { name: 'baoyu-url-to-markdown',  desc: 'URL → Markdown 转换，支持 X/YouTube/HN' },
+      { name: 'baoyu-youtube-transcript',desc: 'YouTube 字幕/封面下载与翻译' },
+      { name: 'contribute-catalog', desc: 'HyperFrames 注册表贡献流程' },
+    ],
+  },
+  {
+    name: '算法与生成艺术',
+    emoji: '&#127922;',
+    color: 'rose',
+    items: [
+      { name: 'algorithmic-art',    desc: 'p5.js 算法生成艺术 — 种子随机性与参数探索' },
+    ],
+  },
+];
+
+// ══════════════════════════════════════════════════════
+// 渲染
+// ══════════════════════════════════════════════════════
+
+function render() {
+  // Stats
+  const statsEl = document.getElementById('stats');
+  statsEl.innerHTML = STATS.map(s => `
+    <div class="stat-card">
+      <div class="num" style="color:${s.color}">${s.num}</div>
+      <div class="label">${s.label}</div>
+    </div>
+  `).join('');
+
+  // MCP
+  const mcpGrid = document.getElementById('mcpGrid');
+  mcpGrid.innerHTML = MCPS.map(m => `
+    <div class="mcp-card">
+      <div class="mcp-icon">${m.icon}</div>
+      <div class="mcp-body">
+        <h3>${m.name}</h3>
+        <div class="desc">${m.desc}</div>
+        <div class="cmd">${m.cmd}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Skills categories
+  const container = document.getElementById('skillsContainer');
+  container.innerHTML = CATEGORIES.map((cat, ci) => `
+    <div class="skill-category fade-in" data-category="${cat.name}">
+      <div class="cat-header" onclick="toggleCat(this)">
+        <span class="chevron">&#9654;</span>
+        <span class="icon ${cat.color} tag-${cat.color}" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;font-size:1rem;">${cat.emoji}</span>
+        <h3>${cat.name}</h3>
+        <span class="cat-count">${cat.items.length}</span>
+      </div>
+      <div class="cat-body open">
+        <div class="skill-list" data-category="${cat.name}">
+          ${cat.items.map(sk => `
+            <div class="skill-item" data-name="${sk.name.toLowerCase()}" data-desc="${(sk.desc||'').toLowerCase()}">
+              <div class="sk-name">
+                <span class="tag tag-${cat.color}" style="margin-right:8px;vertical-align:middle;">${cat.name.slice(0,2)}</span>
+                ${sk.name}
+              </div>
+              <div class="sk-desc">${sk.desc}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Footer time
+  const now = new Date();
+  const opts = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  document.getElementById('footerTime').textContent = now.toLocaleDateString('zh-CN', opts);
+}
+
+// ══════════════════════════════════════════════════════
+// 交互
+// ══════════════════════════════════════════════════════
+
+function toggleCat(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+
+function filterSkills() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const items = document.querySelectorAll('.skill-item');
+  const cats = document.querySelectorAll('.skill-category');
+  let totalVisible = 0;
+
+  items.forEach(el => {
+    const name = el.dataset.name || '';
+    const desc = el.dataset.desc || '';
+    const match = !q || name.includes(q) || desc.includes(q);
+    el.style.display = match ? '' : 'none';
+    if (match) totalVisible++;
+  });
+
+  cats.forEach(cat => {
+    const visible = cat.querySelectorAll('.skill-item[style*="display: none"]').length === 0;
+    const hasItems = cat.querySelectorAll('.skill-item').length > 0;
+    const allHidden = cat.querySelectorAll('.skill-item[style*="display: none"]').length === cat.querySelectorAll('.skill-item').length;
+    cat.style.display = allHidden && hasItems ? 'none' : '';
+  });
+
+  const empty = document.getElementById('emptyState');
+  if (totalVisible === 0 && q) {
+    empty.classList.add('show');
+  } else {
+    empty.classList.remove('show');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// 启动
+// ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>
